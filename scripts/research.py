@@ -18,7 +18,7 @@ from typing import List, Tuple
 # Add lib directory to path
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 
-from lib import dates, dedupe, render, schema, score, sources
+from lib import dates, dedupe, render, schema, score, sources, grounding
 
 
 # Query type patterns
@@ -125,11 +125,17 @@ def run_research(
     # Create report
     report = schema.create_report(query, query_type, depth)
 
+    grounded_answer, grounded_status = grounding.fetch_brave_grounded_answer(query, depth=depth)
+    if grounded_answer:
+        report.grounded_answer = grounded_answer
+
     # Fetch from all sources in parallel
     fetch_results = sources.fetch_parallel(query, depth=depth)
 
     # Collect source statuses
     report.source_status = sources.convert_to_source_status(fetch_results)
+    if grounded_status:
+        report.source_status.append(grounded_status)
 
     # Collect items by type
     reddit, twitter, hn, so, generic = collect_all_items(fetch_results)

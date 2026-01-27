@@ -131,6 +131,26 @@ def render_source_status(statuses: List[schema.SourceStatus]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_grounded_answer_section(answer: Optional[schema.GroundedAnswer]) -> str:
+    """Render grounded answer section."""
+    if not answer or not answer.text:
+        return ""
+
+    lines = ["\n## Grounded Answer\n", answer.text.strip(), ""]
+
+    if answer.citations:
+        lines.append("**Citations:**")
+        for c in answer.citations:
+            label = f"[{c.number}]" if c.number is not None else "-"
+            snippet = c.snippet.replace("\n", " ").strip()
+            if len(snippet) > 200:
+                snippet = snippet[:197] + "..."
+            lines.append(f"- {label} {c.url} — {snippet}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def render_comments(item: schema.ResearchItem, max_comments: int = 3) -> str:
     """Render top comments for an item."""
     comments = getattr(item, 'top_comments', []) or []
@@ -267,6 +287,10 @@ def render_markdown_report(report: schema.ResearchReport) -> str:
     successful_sources = sum(1 for s in report.source_status if s.success)
     total_sources = len(report.source_status)
     lines.append(f"Found {total_items} results from {successful_sources}/{total_sources} sources.\n")
+
+    grounded_section = render_grounded_answer_section(report.grounded_answer)
+    if grounded_section:
+        lines.append(grounded_section)
 
     # Top findings table
     lines.append("\n## Top Findings (Ranked by Score)\n")

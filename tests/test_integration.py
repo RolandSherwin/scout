@@ -12,7 +12,7 @@ import shutil
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
-from lib import sources, enrich
+from lib import sources, enrich, grounding
 
 
 pytestmark = pytest.mark.integration
@@ -265,6 +265,20 @@ class TestCliToolsLive:
             check=False,
         )
         assert result.returncode == 0, f"gh CLI failed: {result.stderr}"
+
+
+class TestBraveGroundingLive:
+    """Smoke test for Brave AI Grounding."""
+
+    def test_brave_grounding(self):
+        if not os.environ.get("BRAVE_API_KEY"):
+            pytest.skip("BRAVE_API_KEY not set")
+
+        answer, status = grounding.fetch_brave_grounded_answer("python programming", depth="quick")
+        assert status.success is True, f"Brave grounding failed: {status.error}"
+        assert answer is not None
+        assert len(answer.text) > 0
+        assert len(answer.citations) > 0
 class TestRedditEnrichmentLive:
     """Test Reddit enrichment against live Reddit JSON."""
 

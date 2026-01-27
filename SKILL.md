@@ -22,6 +22,7 @@ This skill spawns a dedicated research agent to keep the main conversation conte
 - Python 3.8+ for the scoring/fetching scripts
 - Required CLI tools for enrichment: `curl`, `jq`
 - Optional CLI tools: `wget`, `gh`, `bird` (Twitter/X), browser automation tool
+- Optional API keys: `BRAVE_API_KEY` (Brave AI Grounding)
 
 ## Instructions
 

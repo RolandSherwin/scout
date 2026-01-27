@@ -256,6 +256,47 @@ class GenericItem:
         }
 
 
+@dataclass
+class GroundedCitation:
+    """Citation from a grounded answer."""
+    number: Optional[int] = None
+    url: str = ""
+    snippet: str = ""
+    start_index: Optional[int] = None
+    end_index: Optional[int] = None
+    favicon: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        d: Dict[str, Any] = {
+            'url': self.url,
+            'snippet': self.snippet,
+        }
+        if self.number is not None:
+            d['number'] = self.number
+        if self.start_index is not None:
+            d['start_index'] = self.start_index
+        if self.end_index is not None:
+            d['end_index'] = self.end_index
+        if self.favicon:
+            d['favicon'] = self.favicon
+        return d
+
+
+@dataclass
+class GroundedAnswer:
+    """Grounded answer with citations."""
+    text: str
+    citations: List[GroundedCitation] = field(default_factory=list)
+    usage: Optional[Dict[str, Any]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'text': self.text,
+            'citations': [c.to_dict() for c in self.citations],
+            'usage': self.usage,
+        }
+
+
 # Type alias for any research item
 ResearchItem = RedditItem | TwitterItem | HNItem | StackOverflowItem | GenericItem
 
@@ -303,6 +344,9 @@ class ResearchReport:
     # Source status tracking
     source_status: List[SourceStatus] = field(default_factory=list)
 
+    # Grounded answer (optional)
+    grounded_answer: Optional[GroundedAnswer] = None
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             'topic': self.topic,
@@ -316,6 +360,7 @@ class ResearchReport:
             'generic': [g.to_dict() for g in self.generic],
             'all_results': [r.to_dict() for r in self.all_results],
             'source_status': [s.to_dict() for s in self.source_status],
+            'grounded_answer': self.grounded_answer.to_dict() if self.grounded_answer else None,
         }
 
 

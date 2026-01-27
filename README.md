@@ -80,6 +80,12 @@ Results are scored using a tiered system:
 - Required CLI tools: `curl`, `jq`
 - Optional CLI tools: `wget`, `gh`, [bird CLI](https://github.com/steipete/bird) (Twitter/X)
 
+## Full Config (APIs)
+
+To unlock all features, set the following API key(s):
+
+- `BRAVE_API_KEY` — Brave AI Grounding (grounded answer with citations)
+
 ## License
 
 MIT
