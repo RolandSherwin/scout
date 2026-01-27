@@ -48,7 +48,7 @@ This document describes how the research skill categorizes queries and adapts it
 - "React 19 release news"
 
 **Strategy:**
-- Use `freshness: "week"` or `freshness: "day"` in WebSearch
+- Use a freshness/recency filter (e.g., "week" or "day") in your web search tool
 - Prioritize Twitter for real-time updates
 - Sort by recency over engagement
 - Reduce recency scoring window to 30 days
@@ -56,7 +56,7 @@ This document describes how the research skill categorizes queries and adapts it
 **Source Priority:**
 1. Twitter (real-time updates)
 2. HackerNews (tech news aggregation)
-3. WebSearch with freshness filter
+3. Web search with freshness filter
 4. Dev.to (recent articles)
 
 ---
@@ -84,7 +84,7 @@ This document describes how the research skill categorizes queries and adapts it
 **Source Priority:**
 1. Stack Overflow (Q&A with code)
 2. Dev.to (tutorials)
-3. Official documentation (via WebSearch)
+3. Official documentation (via web search)
 4. HackerNews (discussion threads with solutions)
 
 ---
@@ -158,7 +158,7 @@ These sources get full engagement scoring (45/25/30 weights).
 These sources get engagement scoring with a small (-5) tier penalty.
 
 ### Tier 3: No Engagement
-- **General WebSearch**
+- **General web search**
 - **Dev.to articles** (limited engagement)
 - **Blog posts**
 - **Documentation**

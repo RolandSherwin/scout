@@ -27,7 +27,7 @@ def _make_reddit_request(url: str, timeout: int = DEFAULT_TIMEOUT) -> Tuple[bool
         req = urllib.request.Request(
             url,
             headers={
-                'User-Agent': 'Claude Research Agent/1.0 (Educational Research)',
+                'User-Agent': 'Scout Research Agent/1.0 (Educational Research)',
                 'Accept': 'application/json',
             }
         )

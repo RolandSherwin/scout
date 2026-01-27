@@ -1,6 +1,6 @@
 # Scout
 
-Multi-source research agent for Claude Code with engagement-aware scoring.
+Multi-source research agent with engagement-aware scoring.
 
 ## What it does
 
@@ -18,8 +18,11 @@ Scout searches across multiple platforms simultaneously and ranks results by rel
 
 ## Installation
 
+Install via your agent framework's skill installer or clone the repo directly.
+
+Example (if your installer supports GitHub URLs):
 ```bash
-npx skills add https://github.com/RolandSherwin/scout
+npx skills add https://github.com/<org>/scout
 ```
 
 ## Usage
@@ -70,9 +73,10 @@ Results are scored using a tiered system:
 
 ## Requirements
 
-- Claude Code CLI
+- Any agent runner that supports sub-agents and web tools (search + HTTP fetch)
 - Python 3.8+ (for enhanced scoring scripts)
-- [bird CLI](https://github.com/steipete/bird) (optional, for Twitter/X)
+- Required CLI tools: `curl`, `jq`
+- Optional CLI tools: `wget`, `gh`, [bird CLI](https://github.com/steipete/bird) (Twitter/X)
 
 ## License
 
