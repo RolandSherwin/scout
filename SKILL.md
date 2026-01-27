@@ -16,9 +16,16 @@ description: >-
 
 This skill spawns a dedicated research agent to keep the main conversation context clean. The agent has access to Python scripts for enhanced scoring and parallel fetching.
 
+## Requirements
+
+- Agent framework must support sub-agents and web tools (search + HTTP fetch)
+- Python 3.8+ for the scoring/fetching scripts
+- Required CLI tools for enrichment: `curl`, `jq`
+- Optional CLI tools: `wget`, `gh`, `bird` (Twitter/X), browser automation tool
+
 ## Instructions
 
-When this skill is invoked, you MUST spawn a research agent using the **Task** tool. Do NOT perform research directly in the main session.
+When this skill is invoked, you MUST spawn a dedicated research sub-agent using your environment's subagent/task mechanism. Do NOT perform research directly in the main session.
 
 ### Parsing Arguments
 
@@ -33,49 +40,13 @@ Examples:
 
 ### Step 1: Spawn the Research Agent
 
-Use the **Task** tool with these exact parameters:
+Use your platform's subagent/task tool to create a dedicated research agent. Ensure the sub-agent has access to:
+- Web search
+- HTTP fetch or a browserless fetch tool
+- Shell commands (python3, curl, wget, jq)
+- Optional: GitHub CLI, Twitter/X CLI (bird), browser automation
 
-```
-subagent_type: "general-purpose"
-description: "Research: [3-5 word summary of topic]"
-run_in_background: false
-allowed_tools:
-  - "WebSearch"
-  - "WebFetch"
-  - "Bash(python3 *)"
-  - "Bash(curl *)"
-  - "Bash(wget *)"
-  - "Bash(jq *)"
-  - "Bash(gh api *)"
-  - "Bash(gh search *)"
-  - "Bash(gh repo view *)"
-  - "Bash(gh issue view *)"
-  - "Bash(gh issue list *)"
-  - "Bash(gh pr view *)"
-  - "Bash(gh pr list *)"
-  - "Bash(gh release *)"
-  - "Bash(bird read *)"
-  - "Bash(bird search *)"
-  - "Bash(bird thread *)"
-  - "Bash(bird replies *)"
-  - "Bash(bird news *)"
-  - "Bash(bird trending *)"
-  - "Bash(bird user-tweets *)"
-  - "Bash(bird about *)"
-  - "Bash(agent-browser open *)"
-  - "Bash(agent-browser snapshot *)"
-  - "Bash(agent-browser click *)"
-  - "Bash(agent-browser scroll *)"
-  - "Bash(agent-browser get *)"
-  - "Bash(agent-browser screenshot *)"
-  - "Bash(agent-browser wait *)"
-  - "Bash(agent-browser close)"
-  - "Read"
-  - "Glob"
-  - "Grep"
-```
-
-For the `prompt` parameter, include the full research instructions below with the user's topic and depth:
+Pass the full research instructions below to the sub-agent with the user's topic and depth:
 
 ---
 
@@ -111,15 +82,15 @@ Before researching, identify the query type to optimize your approach:
 
 | Source | Tool | What it provides | Engagement |
 |--------|------|------------------|------------|
-| Web | WebSearch | General search results | No |
-| Reddit | WebSearch site:reddit.com | Community discussions | Yes (via enrichment) |
-| Twitter/X | bird CLI | Real-time opinions | Yes |
-| HackerNews | Python script / WebFetch | Tech discussions | Yes |
-| Stack Overflow | Python script / WebFetch | Programming Q&A | Yes |
-| Lobsters | Python script / WebFetch | Curated tech discussions | Yes |
-| Dev.to | Python script / WebFetch | Developer articles | Partial |
-| arXiv | Python script / WebFetch | Academic papers | No |
-| Wikipedia | Python script / WebFetch | Encyclopedic overviews | No |
+| Web | Web search tool | General search results | No |
+| Reddit | Web search + Reddit JSON | Community discussions | Yes (via enrichment) |
+| Twitter/X | bird CLI or other API/tool | Real-time opinions | Yes |
+| HackerNews | Python script / HTTP fetch | Tech discussions | Yes |
+| Stack Overflow | Python script / HTTP fetch | Programming Q&A | Yes |
+| Lobsters | Python script / HTTP fetch | Curated tech discussions | Yes |
+| Dev.to | Python script / HTTP fetch | Developer articles | Partial |
+| arXiv | Python script / HTTP fetch | Academic papers | No |
+| Wikipedia | Python script / HTTP fetch | Encyclopedic overviews | No |
 
 ## Enhanced Research with Python Scripts
 
@@ -127,24 +98,25 @@ The skill includes Python scripts for parallel fetching and scoring. Use them wh
 
 ```bash
 # Fetch from multiple API sources in parallel (HN, SO, Lobsters, etc.)
-python3 ~/new-folder-2/Projects/scout/scripts/research.py "$TOPIC" --depth $DEPTH --format report
+# Run from the repo root, or set SCOUT_ROOT to the repo path.
+python3 scripts/research.py "$TOPIC" --depth $DEPTH --format report
 ```
 
-If the script fails or for sources not covered (WebSearch, Reddit, Twitter), fall back to manual fetching.
+If the script fails or for sources not covered by the script (general web search, Reddit, Twitter/X), fall back to manual fetching.
 
 ## Manual Research Process
 
 **For Twitter/X URLs:** Use bird read, bird thread, bird replies to get full context.
 
 **For general topics:**
-1. WebSearch for general results (use filters based on query type)
-2. WebSearch site:reddit.com for Reddit discussions
-3. bird search for Twitter/X opinions
-4. WebFetch HN Algolia for tech discussions (or use Python script)
-5. WebFetch Stack Exchange for programming Q&A
-6. WebFetch Lobsters for curated tech perspectives
-7. WebFetch Dev.to for developer tutorials/articles
-8. WebFetch arXiv/Wikipedia for academic topics (if relevant)
+1. Web search for general results (use filters based on query type)
+2. Web search site:reddit.com for Reddit discussions
+3. Twitter/X search (bird CLI or equivalent tool)
+4. HTTP fetch HN Algolia for tech discussions (or use Python script)
+5. HTTP fetch Stack Exchange for programming Q&A
+6. HTTP fetch Lobsters for curated tech perspectives
+7. HTTP fetch Dev.to for developer tutorials/articles
+8. HTTP fetch arXiv/Wikipedia for academic topics (if relevant)
 9. Synthesize with citations
 
 ## Scoring System
@@ -159,19 +131,19 @@ Date confidence affects scoring:
 - HIGH confidence (API timestamp): +5 bonus
 - LOW confidence (no date): -15 penalty
 
-## WebSearch Advanced Parameters
+## Search Tool Parameters (if supported)
 
 | Parameter | Description | Example |
 |-----------|-------------|---------|
 | `query` | Search query (required) | `"machine learning"` |
-| `count` | Results to return (1-10) | `10` |
-| `freshness` | Time filter | `"day"`, `"week"`, `"month"`, `"year"` |
+| `count` | Results to return | `10` |
+| `freshness` / `recency` | Time filter | `"day"`, `"week"`, `"month"`, `"year"` |
 | `date_after` | Results after date (YYYY-MM-DD) | `"2024-01-01"` |
 | `date_before` | Results before date (YYYY-MM-DD) | `"2024-06-30"` |
 | `domain_filter` | Allow/deny domains (max 20) | `["nature.com", ".edu"]` or `["-pinterest.com"]` |
 | `country` | 2-letter ISO code | `"US"`, `"DE"`, `"JP"` |
 | `language` | ISO 639-1 language | `"en"`, `"de"`, `"ja"` |
-| `max_tokens` | Content budget (default 25000) | `50000` |
+| `content_budget` | If supported, max content tokens/bytes | `50000` |
 
 ## Search Strategies by Query Type
 
@@ -181,8 +153,9 @@ Date confidence affects scoring:
 - Output as ranked list
 
 **NEWS ("latest", "what's happening"):**
-```javascript
-WebSearch({ query: "topic", freshness: "week" })
+Example (tool-agnostic pseudocode):
+```text
+search(query="topic", freshness="week")
 ```
 
 **HOW_TO ("how to", "tutorial"):**
@@ -199,21 +172,19 @@ WebSearch({ query: "topic", freshness: "week" })
 
 ## Reddit Enrichment
 
-For Reddit posts found via WebSearch, enrich with actual engagement data:
+For Reddit posts found via web search, enrich with actual engagement data:
 ```bash
 # Get real upvotes and top comments
 curl "https://www.reddit.com/r/SUBREDDIT/comments/POST_ID.json?limit=5" -H "User-Agent: Research Agent"
 ```
 
-## Browser Fallback (agent-browser)
+## Browser Automation Fallback
 
-Use agent-browser ONLY when WebFetch fails:
-```bash
-agent-browser open <url>
-agent-browser wait --load networkidle
-agent-browser snapshot -i
-agent-browser close
-```
+Use browser automation ONLY when HTTP fetch fails:
+1. Open the URL in a browser automation tool
+2. Wait for network idle
+3. Capture a snapshot or extract text
+4. Close the browser
 
 ## bird CLI (Twitter/X)
 
@@ -225,7 +196,7 @@ bird replies "<url>" --json --plain -n 20
 bird news --json -n 10
 ```
 
-## API Endpoints (all no-auth, use with WebFetch)
+## API Endpoints (all no-auth, use with HTTP fetch)
 
 # HackerNews
 https://hn.algolia.com/api/v1/search?query=<topic>&tags=story
