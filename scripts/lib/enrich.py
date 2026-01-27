@@ -23,27 +23,47 @@ MAX_COMMENTS = 5  # Top N comments to extract
 
 def _make_reddit_request(url: str, timeout: int = DEFAULT_TIMEOUT) -> Tuple[bool, Any, Optional[str]]:
     """Make a request to Reddit's JSON API."""
-    try:
-        req = urllib.request.Request(
-            url,
-            headers={
-                'User-Agent': 'Scout Research Agent/1.0 (Educational Research)',
-                'Accept': 'application/json',
-            }
-        )
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            data = response.read().decode('utf-8')
-            return True, json.loads(data), None
-    except urllib.error.HTTPError as e:
-        return False, None, f"HTTP {e.code}: {e.reason}"
-    except urllib.error.URLError as e:
-        return False, None, f"URL Error: {e.reason}"
-    except TimeoutError:
-        return False, None, "Request timed out"
-    except json.JSONDecodeError as e:
-        return False, None, f"JSON parse error: {e}"
-    except Exception as e:
-        return False, None, str(e)
+    default_headers = {
+        'User-Agent': 'Scout Research Agent/1.0 (Educational Research)',
+        'Accept': 'application/json',
+    }
+    browser_headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+                      'AppleWebKit/537.36 (KHTML, like Gecko) '
+                      'Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json,text/html;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+    }
+
+    tried_browser = False
+    tried_old = False
+    while True:
+        headers = browser_headers if tried_browser else default_headers
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                data = response.read().decode('utf-8')
+                return True, json.loads(data), None
+        except urllib.error.HTTPError as e:
+            # If blocked, retry with browser-like headers and/or old.reddit.com
+            if e.code == 403:
+                if not tried_browser:
+                    tried_browser = True
+                    continue
+                if not tried_old:
+                    tried_old = True
+                    if "old.reddit.com" not in url:
+                        url = url.replace("www.reddit.com", "old.reddit.com").replace("reddit.com", "old.reddit.com")
+                        continue
+            return False, None, f"HTTP {e.code}: {e.reason}"
+        except urllib.error.URLError as e:
+            return False, None, f"URL Error: {e.reason}"
+        except TimeoutError:
+            return False, None, "Request timed out"
+        except json.JSONDecodeError as e:
+            return False, None, f"JSON parse error: {e}"
+        except Exception as e:
+            return False, None, str(e)
 
 
 def extract_reddit_url_info(url: str) -> Optional[Dict[str, str]]:
