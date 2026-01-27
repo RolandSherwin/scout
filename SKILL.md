@@ -204,8 +204,8 @@ https://hn.algolia.com/api/v1/search?query=<topic>&tags=story
 # Stack Exchange
 https://api.stackexchange.com/2.3/search?order=desc&sort=relevance&intitle=<topic>&site=stackoverflow
 
-# Lobsters
-https://lobste.rs/search.json?q=<topic>&what=stories&order=relevance
+# Lobsters (no search API; use hottest feed and filter client-side)
+https://lobste.rs/hottest.json
 
 # Dev.to
 https://dev.to/api/articles?tag=<topic>&per_page=10
