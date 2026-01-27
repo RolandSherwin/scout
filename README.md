@@ -18,11 +18,13 @@ Scout searches across multiple platforms simultaneously and ranks results by rel
 
 ## Installation
 
-Install via your agent framework's skill installer or clone the repo directly.
-
-Example (if your installer supports GitHub URLs):
 ```bash
-npx skills add https://github.com/<org>/scout
+npx skills add RolandSherwin/scout
+```
+
+Or install globally:
+```bash
+npx skills add RolandSherwin/scout -g
 ```
 
 ## Usage
