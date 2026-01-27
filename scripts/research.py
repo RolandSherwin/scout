@@ -11,6 +11,7 @@ Examples:
 """
 
 import argparse
+import asyncio
 import re
 import sys
 from typing import List, Tuple
@@ -18,7 +19,7 @@ from typing import List, Tuple
 # Add lib directory to path
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 
-from lib import dates, dedupe, render, schema, score, sources, grounding
+from lib import dates, dedupe, render, schema, score, sources, grounding, doctor
 
 
 # Query type patterns
@@ -172,6 +173,10 @@ def run_research(
 
 def main():
     """Main entry point."""
+    if len(sys.argv) > 1 and sys.argv[1] == "doctor":
+        exit_code, _ = asyncio.run(doctor.print_report_stream())
+        sys.exit(exit_code)
+
     parser = argparse.ArgumentParser(
         description='Multi-source research with engagement-aware scoring',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -180,6 +185,7 @@ Examples:
   python3 research.py "best Python web frameworks"
   python3 research.py "kubernetes news" --depth quick
   python3 research.py "React vs Vue" --depth deep --format json
+  python3 research.py doctor
         """
     )
     parser.add_argument('query', help='Search query')

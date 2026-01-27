@@ -35,6 +35,14 @@ npx skills add RolandSherwin/scout -g
 /scout --deep React vs Vue comparison
 ```
 
+### Doctor
+
+Run a quick self-check for required tools, optional tools, and API endpoints:
+
+```
+python3 scripts/research.py doctor
+```
+
 ### Depth Options
 
 | Flag | Sources | Use Case |
