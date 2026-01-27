@@ -3,6 +3,13 @@
 import pytest
 from datetime import datetime, timedelta, timezone
 
+
+def pytest_configure(config):
+    """Register custom markers."""
+    config.addinivalue_line(
+        "markers", "integration: marks tests that hit real APIs (deselect with '-m \"not integration\"')"
+    )
+
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))

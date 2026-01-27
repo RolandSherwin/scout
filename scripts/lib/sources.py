@@ -10,7 +10,7 @@ Supports fetching from multiple sources in parallel using ThreadPoolExecutor:
 - DuckDuckGo Instant Answer API
 - Reddit (via URL enrichment)
 
-Note: WebSearch, Twitter (bird CLI), and direct Reddit search are handled
+Note: Web search, Twitter/X (bird CLI), and direct Reddit search are handled
 by the agent itself, not this module. This module handles the no-auth APIs.
 """
 
@@ -49,7 +49,7 @@ def _make_request(url: str, timeout: int = DEFAULT_TIMEOUT) -> Tuple[bool, Any, 
         req = urllib.request.Request(
             url,
             headers={
-                'User-Agent': 'Claude Research Agent/1.0',
+                'User-Agent': 'Scout Research Agent/1.0',
                 'Accept': 'application/json',
             }
         )
@@ -177,13 +177,14 @@ def fetch_stackoverflow(query: str, limit: int = 10, timeout: int = DEFAULT_TIME
 def fetch_lobsters(query: str, limit: int = 10, timeout: int = DEFAULT_TIMEOUT) -> FetchResult:
     """Fetch stories from Lobsters API.
 
-    API: https://lobste.rs/search.json?q=<topic>&what=stories&order=relevance
+    Note: Lobsters doesn't have a search API, so we fetch hottest stories
+    and filter client-side by matching query terms in title/tags.
     """
     start = time.time()
     source_name = "lobsters"
 
-    encoded_query = urllib.parse.quote(query)
-    url = f"https://lobste.rs/search.json?q={encoded_query}&what=stories&order=relevance"
+    # Lobsters only supports feed endpoints, not search
+    url = "https://lobste.rs/hottest.json"
 
     success, data, error = _make_request(url, timeout)
     duration_ms = int((time.time() - start) * 1000)
@@ -197,7 +198,17 @@ def fetch_lobsters(query: str, limit: int = 10, timeout: int = DEFAULT_TIMEOUT) 
         items = []
 
         stories = parsed if isinstance(parsed, list) else parsed.get('results', [])
-        for story in stories[:limit]:
+
+        # Filter stories by query terms (case-insensitive)
+        query_terms = query.lower().split()
+        filtered_stories = []
+        for story in stories:
+            title = story.get('title', '').lower()
+            tags = [t.lower() for t in story.get('tags', [])]
+            if any(term in title or term in tags for term in query_terms):
+                filtered_stories.append(story)
+
+        for story in filtered_stories[:limit]:
             # Parse date from created_at
             created_at = story.get('created_at', '')
             date_str = None

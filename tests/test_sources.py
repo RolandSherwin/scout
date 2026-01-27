@@ -45,11 +45,12 @@ MOCK_SO_RESPONSE = {
 MOCK_LOBSTERS_RESPONSE = [
     {
         "short_id": "abc123",
-        "title": "Lobsters Test Story",
+        "title": "Rust Programming Best Practices",
         "url": "https://example.com/lobsters",
         "created_at": "2024-01-28T12:00:00Z",
         "score": 30,
         "comment_count": 10,
+        "tags": ["rust", "programming"],
         "submitter_user": {"username": "lobster_user"},
     }
 ]
