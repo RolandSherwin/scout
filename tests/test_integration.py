@@ -1,19 +1,20 @@
-"""Integration tests that hit real APIs to verify sources are working.
+"""Integration tests that hit real APIs/CLIs to verify sources are working.
 
 Run with: pytest tests/test_integration.py -v
-Skip in CI: pytest -m "not integration"
+These are intended for local/debug runs and will hit live services.
 """
 
 import pytest
 import sys
 import os
+import subprocess
+import shutil
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
-from lib import sources
+from lib import sources, enrich
 
 
-# Mark all tests in this module as integration tests
 pytestmark = pytest.mark.integration
 
 
@@ -221,3 +222,75 @@ class TestSourceRegistry:
         assert result.source_name == 'duckduckgo'
         assert hasattr(result, 'success')
         assert hasattr(result, 'items')
+
+
+class TestResearchCLILive:
+    """Smoke test for research CLI using live APIs."""
+
+    def test_research_cli_quick_report(self):
+        # Use a short query to reduce load/time
+        result = subprocess.run(
+            [sys.executable, os.path.join(os.path.dirname(__file__), '..', 'scripts', 'research.py'),
+             "python web frameworks", "--depth", "quick", "--format", "report"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, f"research.py failed: {result.stderr}"
+        assert "Research:" in result.stdout
+        assert "Top Findings" in result.stdout
+
+
+class TestCliToolsLive:
+    """Smoke tests for optional CLI integrations."""
+
+    def test_bird_cli_search(self):
+        if shutil.which("bird") is None:
+            pytest.skip("bird CLI not installed")
+        result = subprocess.run(
+            ["bird", "search", "python", "--json", "-n", "1", "--plain"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, f"bird CLI failed: {result.stderr}"
+
+    def test_gh_cli_api(self):
+        if shutil.which("gh") is None:
+            pytest.skip("gh CLI not installed")
+        result = subprocess.run(
+            ["gh", "api", "rate_limit"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, f"gh CLI failed: {result.stderr}"
+class TestRedditEnrichmentLive:
+    """Test Reddit enrichment against live Reddit JSON."""
+
+    def test_enriches_live_post(self):
+        # Fetch a live listing to obtain a real post permalink
+        listing_url = "https://old.reddit.com/r/python/new.json?limit=1"
+        success, data, error = enrich._make_reddit_request(listing_url)
+        assert success, f"Reddit listing fetch failed: {error}"
+
+        # Extract the first permalink and build a post URL
+        if isinstance(data, dict):
+            children = data.get('data', {}).get('children', [])
+        elif isinstance(data, list) and data:
+            children = data[0].get('data', {}).get('children', [])
+        else:
+            children = []
+        assert len(children) > 0, "No posts returned from Reddit listing"
+
+        post = children[0].get('data', {}) if isinstance(children[0], dict) else {}
+        permalink = post.get('permalink')
+        assert permalink, "Reddit listing missing permalink"
+
+        post_url = f"https://www.reddit.com{permalink}"
+        enriched = enrich.enrich_reddit_post(post_url)
+
+        assert enriched is not None, "Reddit enrichment returned None"
+        assert enriched.get('id'), "Missing post id"
+        assert enriched.get('title'), "Missing title"
+        assert enriched.get('num_comments') is not None, "Missing comment count"
