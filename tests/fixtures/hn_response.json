@@ -1,0 +1,26 @@
+{
+  "hits": [
+    {
+      "objectID": "12345",
+      "title": "Show HN: A New Python Testing Framework",
+      "url": "https://github.com/example/testframework",
+      "author": "hnuser",
+      "created_at_i": 1706400000,
+      "points": 350,
+      "num_comments": 120
+    },
+    {
+      "objectID": "12346",
+      "title": "Python 3.13 Released with Performance Improvements",
+      "url": "https://python.org/news/v313",
+      "author": "pythondev",
+      "created_at_i": 1706300000,
+      "points": 500,
+      "num_comments": 200
+    }
+  ],
+  "nbHits": 2,
+  "page": 0,
+  "nbPages": 1,
+  "hitsPerPage": 10
+}
