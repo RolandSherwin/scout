@@ -48,21 +48,6 @@ class Engagement:
 
 
 @dataclass
-class SubScores:
-    """Component scores for transparency."""
-    relevance: int = 0
-    recency: int = 0
-    engagement: int = 0
-
-    def to_dict(self) -> Dict[str, int]:
-        return {
-            'relevance': self.relevance,
-            'recency': self.recency,
-            'engagement': self.engagement,
-        }
-
-
-@dataclass
 class Comment:
     """Top comment/answer excerpt."""
     score: int
@@ -92,10 +77,6 @@ class RedditItem:
     date_confidence: str = "low"  # high/med/low
     engagement: Optional[Engagement] = None
     top_comments: List[Comment] = field(default_factory=list)
-    relevance: float = 0.5
-    why_relevant: str = ""
-    subs: SubScores = field(default_factory=SubScores)
-    score: int = 0
     source_type: str = "reddit"
 
     def to_dict(self) -> Dict[str, Any]:
@@ -109,10 +90,6 @@ class RedditItem:
             'date_confidence': self.date_confidence,
             'engagement': self.engagement.to_dict() if self.engagement else None,
             'top_comments': [c.to_dict() for c in self.top_comments],
-            'relevance': self.relevance,
-            'why_relevant': self.why_relevant,
-            'subs': self.subs.to_dict(),
-            'score': self.score,
         }
 
 
@@ -126,10 +103,6 @@ class TwitterItem:
     date: Optional[str] = None
     date_confidence: str = "low"
     engagement: Optional[Engagement] = None
-    relevance: float = 0.5
-    why_relevant: str = ""
-    subs: SubScores = field(default_factory=SubScores)
-    score: int = 0
     source_type: str = "twitter"
 
     def to_dict(self) -> Dict[str, Any]:
@@ -142,10 +115,6 @@ class TwitterItem:
             'date': self.date,
             'date_confidence': self.date_confidence,
             'engagement': self.engagement.to_dict() if self.engagement else None,
-            'relevance': self.relevance,
-            'why_relevant': self.why_relevant,
-            'subs': self.subs.to_dict(),
-            'score': self.score,
         }
 
 
@@ -160,10 +129,6 @@ class HNItem:
     date: Optional[str] = None
     date_confidence: str = "low"
     engagement: Optional[Engagement] = None  # points, num_comments
-    relevance: float = 0.5
-    why_relevant: str = ""
-    subs: SubScores = field(default_factory=SubScores)
-    score: int = 0
     source_type: str = "hackernews"
 
     def to_dict(self) -> Dict[str, Any]:
@@ -177,10 +142,6 @@ class HNItem:
             'date': self.date,
             'date_confidence': self.date_confidence,
             'engagement': self.engagement.to_dict() if self.engagement else None,
-            'relevance': self.relevance,
-            'why_relevant': self.why_relevant,
-            'subs': self.subs.to_dict(),
-            'score': self.score,
         }
 
 
@@ -195,10 +156,6 @@ class StackOverflowItem:
     engagement: Optional[Engagement] = None  # votes, answer_count, is_accepted
     top_answers: List[Comment] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
-    relevance: float = 0.5
-    why_relevant: str = ""
-    subs: SubScores = field(default_factory=SubScores)
-    score: int = 0
     source_type: str = "stackoverflow"
 
     def to_dict(self) -> Dict[str, Any]:
@@ -212,10 +169,6 @@ class StackOverflowItem:
             'engagement': self.engagement.to_dict() if self.engagement else None,
             'top_answers': [a.to_dict() for a in self.top_answers],
             'tags': self.tags,
-            'relevance': self.relevance,
-            'why_relevant': self.why_relevant,
-            'subs': self.subs.to_dict(),
-            'score': self.score,
         }
 
 
@@ -231,10 +184,6 @@ class GenericItem:
     date: Optional[str] = None
     date_confidence: str = "low"
     engagement: Optional[Engagement] = None  # May have points for Lobsters/Dev.to
-    relevance: float = 0.5
-    why_relevant: str = ""
-    subs: SubScores = field(default_factory=SubScores)
-    score: int = 0
     source_type: str = "generic"
 
     def to_dict(self) -> Dict[str, Any]:
@@ -249,10 +198,6 @@ class GenericItem:
             'date': self.date,
             'date_confidence': self.date_confidence,
             'engagement': self.engagement.to_dict() if self.engagement else None,
-            'relevance': self.relevance,
-            'why_relevant': self.why_relevant,
-            'subs': self.subs.to_dict(),
-            'score': self.score,
         }
 
 
@@ -324,12 +269,63 @@ class SourceStatus:
 
 
 @dataclass
+class FetchResponse:
+    """Response from a fetch operation."""
+    query: str
+    fetched_at: str
+    sources_requested: List[str] = field(default_factory=list)
+
+    # Results by source
+    hackernews: List[HNItem] = field(default_factory=list)
+    stackoverflow: List[StackOverflowItem] = field(default_factory=list)
+    generic: List[GenericItem] = field(default_factory=list)
+
+    # Source status tracking
+    source_status: List[SourceStatus] = field(default_factory=list)
+
+    # Grounded answer (optional)
+    grounded_answer: Optional[GroundedAnswer] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'meta': {
+                'query': self.query,
+                'fetched_at': self.fetched_at,
+                'sources_requested': self.sources_requested,
+            },
+            'results': {
+                'hackernews': {
+                    'items': [h.to_dict() for h in self.hackernews],
+                    'item_count': len(self.hackernews),
+                },
+                'stackoverflow': {
+                    'items': [s.to_dict() for s in self.stackoverflow],
+                    'item_count': len(self.stackoverflow),
+                },
+                'generic': [g.to_dict() for g in self.generic],
+            },
+            'source_status': [s.to_dict() for s in self.source_status],
+            'grounded_answer': self.grounded_answer.to_dict() if self.grounded_answer else None,
+        }
+
+
+def create_fetch_response(query: str, sources: List[str]) -> FetchResponse:
+    """Create a new fetch response."""
+    return FetchResponse(
+        query=query,
+        fetched_at=datetime.now(timezone.utc).isoformat(),
+        sources_requested=sources,
+    )
+
+
+# Keep legacy for backwards compatibility during transition
+@dataclass
 class ResearchReport:
-    """Full research report."""
+    """Full research report (legacy - use FetchResponse for new code)."""
     topic: str
-    query_type: str  # RECOMMENDATIONS, NEWS, HOW_TO, COMPARISON, GENERAL
-    depth: str  # quick, default, deep
-    generated_at: str
+    query_type: str = "GENERAL"
+    depth: str = "default"
+    generated_at: str = ""
 
     # Results by source
     reddit: List[RedditItem] = field(default_factory=list)
@@ -364,8 +360,8 @@ class ResearchReport:
         }
 
 
-def create_report(topic: str, query_type: str, depth: str) -> ResearchReport:
-    """Create a new research report."""
+def create_report(topic: str, query_type: str = "GENERAL", depth: str = "default") -> ResearchReport:
+    """Create a new research report (legacy - use create_fetch_response for new code)."""
     return ResearchReport(
         topic=topic,
         query_type=query_type,

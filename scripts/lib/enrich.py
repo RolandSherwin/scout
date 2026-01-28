@@ -167,7 +167,7 @@ def parse_reddit_post(data: List[Any]) -> Optional[Dict[str, Any]]:
         return None
 
 
-def enrich_reddit_post(url: str, timeout: int = DEFAULT_TIMEOUT) -> Optional[Dict[str, Any]]:
+def enrich_reddit_post(url: str, timeout: int = DEFAULT_TIMEOUT) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """Fetch and enrich a Reddit post with actual engagement data.
 
     Args:
@@ -175,17 +175,21 @@ def enrich_reddit_post(url: str, timeout: int = DEFAULT_TIMEOUT) -> Optional[Dic
         timeout: Request timeout in seconds
 
     Returns:
-        Enriched post data or None if fetch failed
+        (enriched post data, error). Error is None on success.
     """
     json_url = build_reddit_json_url(url)
     if not json_url:
-        return None
+        return None, "Invalid Reddit URL"
 
     success, data, error = _make_reddit_request(json_url, timeout)
     if not success:
-        return None
+        return None, error or "Reddit request failed"
 
-    return parse_reddit_post(data)
+    parsed = parse_reddit_post(data)
+    if not parsed:
+        return None, "Unable to parse Reddit response"
+
+    return parsed, None
 
 
 def enrich_reddit_item(item: schema.RedditItem, timeout: int = DEFAULT_TIMEOUT) -> schema.RedditItem:
@@ -198,7 +202,7 @@ def enrich_reddit_item(item: schema.RedditItem, timeout: int = DEFAULT_TIMEOUT) 
     Returns:
         Enriched RedditItem (mutates and returns same object)
     """
-    enriched = enrich_reddit_post(item.url, timeout)
+    enriched, _ = enrich_reddit_post(item.url, timeout)
     if not enriched:
         return item
 
@@ -228,6 +232,43 @@ def enrich_reddit_item(item: schema.RedditItem, timeout: int = DEFAULT_TIMEOUT) 
     ]
 
     return item
+
+
+def enrich_reddit_item_with_error(
+    item: schema.RedditItem,
+    timeout: int = DEFAULT_TIMEOUT,
+) -> Tuple[schema.RedditItem, Optional[str]]:
+    """Enrich a RedditItem and return any fetch error."""
+    enriched, error = enrich_reddit_post(item.url, timeout)
+    if not enriched:
+        return item, error
+
+    # Update engagement
+    item.engagement = schema.Engagement(
+        score=enriched['score'],
+        num_comments=enriched['num_comments'],
+        upvote_ratio=enriched['upvote_ratio'],
+    )
+
+    # Update date if we got it
+    if enriched.get('created_utc'):
+        date_str = dates.timestamp_to_date(enriched['created_utc'])
+        if date_str:
+            item.date = date_str
+            item.date_confidence = 'high'  # Timestamp from API is reliable
+
+    # Add top comments
+    item.top_comments = [
+        schema.Comment(
+            score=c['score'],
+            author=c['author'],
+            excerpt=c['excerpt'],
+            date=c.get('date'),
+        )
+        for c in enriched.get('top_comments', [])
+    ]
+
+    return item, None
 
 
 def enrich_reddit_items(items: List[schema.RedditItem], timeout: int = DEFAULT_TIMEOUT) -> List[schema.RedditItem]:

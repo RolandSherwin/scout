@@ -1,20 +1,29 @@
 # Scout
 
-Multi-source research agent with engagement-aware scoring.
+Multi-source metadata fetcher for AI agent research.
 
 ## What it does
 
-Scout searches across multiple platforms simultaneously and ranks results by relevance, recency, and engagement:
+Scout fetches metadata + engagement metrics from community sources. It does NOT make decisions about ranking or presentation - the AI agent makes those decisions based on the query type it detects.
 
-- **Google** - General web results
-- **Reddit** - Community discussions with upvotes/comments
-- **HackerNews** - Tech discussions with points
-- **Twitter/X** - Real-time opinions via bird CLI
-- **Stack Overflow** - Programming Q&A with vote counts
-- **Lobsters** - Curated tech discussions
-- **Dev.to** - Developer articles
+**Sources:**
+- **HackerNews** - Tech discussions with points, num_comments
+- **Stack Overflow** - Q&A with votes, answer_count, is_answered
+- **Lobsters** - Curated tech discussions with score
+- **Dev.to** - Developer articles with reactions
 - **arXiv** - Academic papers
-- **Wikipedia** - Encyclopedic overviews
+- **Wikipedia** - Encyclopedic reference
+- **Reddit** - Community discussions (via URL enrichment)
+- **Brave** - AI-grounded answers with citations (optional)
+
+## Architecture
+
+```
+User Query → [AGENT detects query type] → Scout fetches metadata →
+Raw JSON with engagement → [AGENT scores/ranks/formats]
+```
+
+Scout provides the data. The agent makes the decisions.
 
 ## Installation
 
@@ -29,70 +38,90 @@ npx skills add RolandSherwin/scout -g
 
 ## Usage
 
-```
-/scout best Python web frameworks
-/scout --quick kubernetes news
-/scout --deep React vs Vue comparison
-```
-
-### Doctor
-
-Run a quick self-check for required tools, optional tools, and API endpoints:
-
-```
-python3 scripts/research.py doctor
+### Fetch from multiple sources
+```bash
+python3 scripts/fetch.py all "kubernetes" --sources hn,so,lobsters
 ```
 
-### Depth Options
+### Fetch from single source
+```bash
+python3 scripts/fetch.py hn "machine learning" --limit 10
+python3 scripts/fetch.py so "python frameworks" --limit 15
+```
 
-| Flag | Sources | Use Case |
-|------|---------|----------|
-| `--quick` | 5-10 | Fast scan, time-sensitive queries |
-| *(default)* | 15-25 | Balanced research |
-| `--deep` | 40-60 | Comprehensive analysis |
+### Enrich a Reddit URL
+```bash
+python3 scripts/fetch.py enrich-reddit "https://reddit.com/r/python/comments/..."
+```
 
-## Features
+### Run health checks
+```bash
+python3 scripts/fetch.py doctor
+```
 
-- **Engagement-aware scoring** - Weighs upvotes, comments, and points
-- **Query type detection** - Optimizes strategy for recommendations, news, how-to, comparisons
-- **Parallel fetching** - Searches multiple sources concurrently
-- **Deduplication** - Removes similar content across sources
-- **Advanced filtering** - Domain allowlist/denylist, freshness, date ranges
-- **Source reliability tracking** - Reports which sources succeeded/failed
+### List available sources
+```bash
+python3 scripts/fetch.py list-sources
+```
 
 ## Output Format
 
-Scout returns a structured report with:
+All output is JSON:
 
-- Summary with source count
-- Top findings ranked by score with engagement metrics
-- Categorized results (Twitter, Community, Dev, Academic)
-- Conflicting information highlighted
-- Source reliability table
-- Full citations with confidence levels
+```json
+{
+  "meta": {
+    "query": "kubernetes",
+    "fetched_at": "2026-01-28T10:00:00Z",
+    "sources_requested": ["hn", "so"]
+  },
+  "results": {
+    "hn": {
+      "success": true,
+      "item_count": 10,
+      "items": [
+        {
+          "id": "12345",
+          "title": "Show HN: K8s Tool",
+          "url": "https://...",
+          "date": "2024-01-27",
+          "date_confidence": "high",
+          "engagement": {
+            "points": 450,
+            "num_comments": 189
+          }
+        }
+      ]
+    }
+  }
+}
+```
 
-## How Scoring Works
+## Agent Workflow
 
-Results are scored using a tiered system:
+The agent (not scout) handles:
+1. **Query type detection** - Is this a recommendation, news, how-to, or comparison?
+2. **Source selection** - Which sources are best for this query type?
+3. **Scoring** - How to weight engagement vs recency based on query type
+4. **Deduplication** - Whether to merge similar results
+5. **Presentation** - How to format the output for the user
 
-| Tier | Sources | Formula |
-|------|---------|---------|
-| 1 | Reddit, Twitter | 45% relevance + 25% recency + 30% engagement |
-| 2 | HN, SO, Lobsters | Same formula with -5 tier penalty |
-| 3 | Web, blogs, docs | 55% relevance + 45% recency - 15 penalty |
+See `SKILL.md` for comprehensive guidance on these decisions.
+
+## Engagement Fields by Source
+
+| Source | Fields |
+|--------|--------|
+| HackerNews | points, num_comments |
+| Stack Overflow | votes, answer_count, view_count, is_answered |
+| Lobsters | score, comment_count |
+| Dev.to | reactions, comments |
+| Reddit | score, upvote_ratio, num_comments |
 
 ## Requirements
 
-- Any agent runner that supports sub-agents and web tools (search + HTTP fetch)
-- Python 3.8+ (for enhanced scoring scripts)
-- Required CLI tools: `curl`, `jq`
-- Optional CLI tools: `wget`, `gh`, [bird CLI](https://github.com/steipete/bird) (Twitter/X)
-
-## Full Config (APIs)
-
-To unlock all features, set the following API key(s):
-
-- `BRAVE_API_KEY` — Brave AI Grounding (grounded answer with citations)
+- Python 3.8+
+- Optional: `BRAVE_API_KEY` for AI-grounded answers
 
 ## License
 

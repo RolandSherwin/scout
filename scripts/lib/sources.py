@@ -107,7 +107,6 @@ def fetch_hackernews(query: str, limit: int = 10, timeout: int = DEFAULT_TIMEOUT
                 date=date_str,
                 date_confidence=dates.get_date_confidence(date_str),
                 engagement=engagement,
-                relevance=0.7,  # Default relevance for API results
             )
             items.append(item)
 
@@ -162,7 +161,6 @@ def fetch_stackoverflow(query: str, limit: int = 10, timeout: int = DEFAULT_TIME
                 date_confidence=dates.get_date_confidence(date_str),
                 engagement=engagement,
                 tags=q.get('tags', []),
-                relevance=0.7,
             )
             items.append(item)
 
@@ -231,7 +229,6 @@ def fetch_lobsters(query: str, limit: int = 10, timeout: int = DEFAULT_TIMEOUT) 
                 date=date_str,
                 date_confidence=dates.get_date_confidence(date_str),
                 engagement=engagement,
-                relevance=0.7,
             )
             items.append(item)
 
@@ -292,7 +289,6 @@ def fetch_devto(query: str, limit: int = 10, timeout: int = DEFAULT_TIMEOUT) -> 
                 date=date_str,
                 date_confidence=dates.get_date_confidence(date_str),
                 engagement=engagement,
-                relevance=0.6,  # Slightly lower for tag-based search
             )
             items.append(item)
 
@@ -370,7 +366,6 @@ def fetch_arxiv(query: str, limit: int = 10, timeout: int = DEFAULT_TIMEOUT) -> 
                 author=', '.join(authors[:3]),
                 date=date_str,
                 date_confidence=dates.get_date_confidence(date_str),
-                relevance=0.7,
             )
             items.append(item)
 
@@ -424,7 +419,6 @@ def fetch_wikipedia(query: str, limit: int = 5, timeout: int = DEFAULT_TIMEOUT) 
                 url=url,
                 source_name="wikipedia",
                 snippet=snippet,
-                relevance=0.6,  # Wikipedia is reference, not discussion
             )
             items.append(item)
 
@@ -467,7 +461,6 @@ def fetch_duckduckgo(query: str, timeout: int = DEFAULT_TIMEOUT) -> FetchResult:
                 url=parsed.get('AbstractURL', ''),
                 source_name="duckduckgo",
                 snippet=parsed.get('Abstract', ''),
-                relevance=0.5,  # Instant answers are supplementary
             )
             items.append(item)
 
@@ -480,7 +473,6 @@ def fetch_duckduckgo(query: str, timeout: int = DEFAULT_TIMEOUT) -> FetchResult:
                     url=topic.get('FirstURL', ''),
                     source_name="duckduckgo",
                     snippet=topic.get('Text', ''),
-                    relevance=0.4,
                 )
                 items.append(item)
 
@@ -493,9 +485,12 @@ def fetch_duckduckgo(query: str, timeout: int = DEFAULT_TIMEOUT) -> FetchResult:
 
 
 # Source registry: maps source name to fetch function
+# Includes short aliases (hn, so) for convenience
 SOURCE_REGISTRY: Dict[str, Callable] = {
     'hackernews': fetch_hackernews,
+    'hn': fetch_hackernews,  # alias
     'stackoverflow': fetch_stackoverflow,
+    'so': fetch_stackoverflow,  # alias
     'lobsters': fetch_lobsters,
     'devto': fetch_devto,
     'arxiv': fetch_arxiv,
@@ -543,6 +538,7 @@ def fetch_parallel(
     query: str,
     sources: Optional[List[str]] = None,
     depth: str = 'default',
+    limit: Optional[int] = None,
     max_workers: int = 5,
 ) -> Dict[str, FetchResult]:
     """Fetch from multiple sources in parallel.
@@ -551,6 +547,7 @@ def fetch_parallel(
         query: Search query
         sources: List of source names (defaults based on depth)
         depth: 'quick', 'default', or 'deep'
+        limit: Optional per-source item limit override
         max_workers: Max concurrent fetches
 
     Returns:
@@ -559,7 +556,7 @@ def fetch_parallel(
     if sources is None:
         sources = get_sources_for_depth(depth)
 
-    limit = get_limits_for_depth(depth)
+    limit = limit if limit is not None else get_limits_for_depth(depth)
     timeout = get_timeout_for_depth(depth)
 
     results: Dict[str, FetchResult] = {}

@@ -1,279 +1,502 @@
 ---
 name: scout
 description: >-
-  Multi-source research agent with engagement-aware scoring. Searches Google,
-  Reddit, GitHub, HackerNews, Twitter/X, Stack Overflow, arXiv, Wikipedia,
-  Lobsters, Dev.to and more. Use when user says "research", "look up",
-  "find out about", "what's the latest on", "search for", "what do people
-  think about", "deep dive", "investigate", or asks open-ended questions
-  about software/tools/products. Produces comprehensive reports with citations.
-
-  DEPTH: Use "scout --quick <topic>" (5-10 sources), "scout <topic>" (15-25),
-  or "scout --deep <topic>" (40-60 sources).
+  Multi-source metadata fetcher. Returns raw JSON with engagement metrics from
+  HackerNews, Stack Overflow, Lobsters, Dev.to, arXiv, Wikipedia, plus Reddit via
+  URL enrichment.
+  Scout fetches metadata - YOU decide ranking, filtering, deduplication, and
+  presentation based on the query type you identify.
+argument-hint: "<query>" or "<query> --sources hn,so"
 ---
 
-# Research Skill - Agent Orchestrator
+# Scout - Community Metadata Fetcher
 
-This skill spawns a dedicated research agent to keep the main conversation context clean. The agent has access to Python scripts for enhanced scoring and parallel fetching.
+Scout fetches metadata + engagement from community sources. It does NOT fetch article
+content - use WebFetch for that. Reddit requires URL enrichment. YOU make all decisions
+about ranking and presentation.
 
-## Requirements
+## What Scout Does vs What You Do
 
-- Agent framework must support sub-agents and web tools (search + HTTP fetch)
-- Python 3.8+ for the scoring/fetching scripts
-- Required CLI tools for enrichment: `curl`, `jq`
-- Optional CLI tools: `wget`, `gh`, `bird` (Twitter/X), browser automation tool
-- Optional API keys: `BRAVE_API_KEY` (Brave AI Grounding)
-
-## Instructions
-
-When this skill is invoked, you MUST spawn a dedicated research sub-agent using your environment's subagent/task mechanism. Do NOT perform research directly in the main session.
-
-### Parsing Arguments
-
-Parse the user's input for:
-- **Depth flags**: `--quick` or `--deep` (default: normal depth)
-- **Topic**: Everything else is the search topic
-
-Examples:
-- `scout best Python frameworks` → depth=default, topic="best Python frameworks"
-- `scout --quick kubernetes news` → depth=quick, topic="kubernetes news"
-- `scout --deep React vs Vue` → depth=deep, topic="React vs Vue"
-
-### Step 1: Spawn the Research Agent
-
-Use your platform's subagent/task tool to create a dedicated research agent. Ensure the sub-agent has access to:
-- Web search
-- HTTP fetch or a browserless fetch tool
-- Shell commands (python3, curl, wget, jq)
-- Optional: GitHub CLI, Twitter/X CLI (bird), browser automation
-
-Pass the full research instructions below to the sub-agent with the user's topic and depth:
+| Scout Does (Deterministic) | You Do (Judgment) |
+|---------------------------|-------------------|
+| Call HN/SO/Lobsters/etc APIs | Decide which sources to query |
+| Parse JSON responses | Detect query type (RECOMMENDATIONS, NEWS, etc.) |
+| Return engagement metrics | Score/rank results based on query type |
+| Reddit enrichment for engagement | Deduplicate if needed |
+| | Decide which URLs to fetch with WebFetch |
+| | Format output for user |
 
 ---
 
-**PROMPT TO PASS TO THE AGENT:**
+## CRITICAL: Parse User Intent First
 
-```
-You are a research agent. Research the following topic thoroughly and return a structured report.
+Before calling scout, analyze the user's query to determine the best approach:
 
-TOPIC: $TOPIC
-DEPTH: $DEPTH (quick|default|deep)
+### Step 1: Detect Query Type
 
-## Research Depth Configuration
+| Type | Trigger Patterns | Your Strategy |
+|------|-----------------|---------------|
+| RECOMMENDATIONS | "best X", "top X", "recommend", "which should I use" | Weight engagement higher (points, votes) |
+| NEWS | "what's happening with X", "latest", "news", "today" | Weight recency higher (date) |
+| HOW_TO | "how to X", "tutorial", "guide", "implement" | Weight is_answered, answer_count (SO) |
+| COMPARISON | "X vs Y", "compare", "difference between" | Aggregate mentions across sources |
+| GENERAL | anything else | Balanced approach |
 
-| Depth | Sources | Timeout | Use Case |
-|-------|---------|---------|----------|
-| quick | 5-10 | 90s | Fast scan, time-sensitive |
-| default | 15-25 | 120s | Balanced research |
-| deep | 40-60 | 180s | Comprehensive analysis |
+### Step 2: Select Sources Based on Query Type
 
-## Query Type Detection
+| Query Type | Best Sources | Why |
+|------------|--------------|-----|
+| RECOMMENDATIONS | hn, lobsters, reddit (via web search) | Community discussion, upvotes indicate quality |
+| NEWS | hn, lobsters | Tech news aggregators |
+| HOW_TO | so, devto | Has is_answered, code examples |
+| COMPARISON | hn, so, lobsters | Discussion threads with pros/cons |
+| ACADEMIC | arxiv, wikipedia | Academic papers, encyclopedic |
+| GENERAL | hn, so, lobsters, devto | Balanced coverage |
 
-Before researching, identify the query type to optimize your approach:
+**Store these for later:**
+- `QUERY_TYPE` = [detected type]
+- `TOPIC` = [core topic extracted]
+- `SELECTED_SOURCES` = [sources to query]
 
-| Type | Triggers | Strategy |
-|------|----------|----------|
-| RECOMMENDATIONS | "best", "top", "recommend" | Prioritize Reddit/HN, track mentions |
-| NEWS | "latest", "news", "happening" | Use freshness filters, prioritize recency |
-| HOW_TO | "how to", "tutorial", "guide" | Focus on SO, Dev.to, docs |
-| COMPARISON | "vs", "compare", "difference" | Find comparison posts, build pros/cons |
-| GENERAL | default | Balanced approach |
+---
 
-## Research Sources
-
-| Source | Tool | What it provides | Engagement |
-|--------|------|------------------|------------|
-| Web | Web search tool | General search results | No |
-| Reddit | Web search + Reddit JSON | Community discussions | Yes (via enrichment) |
-| Twitter/X | bird CLI or other API/tool | Real-time opinions | Yes |
-| HackerNews | Python script / HTTP fetch | Tech discussions | Yes |
-| Stack Overflow | Python script / HTTP fetch | Programming Q&A | Yes |
-| Lobsters | Python script / HTTP fetch | Curated tech discussions | Yes |
-| Dev.to | Python script / HTTP fetch | Developer articles | Partial |
-| arXiv | Python script / HTTP fetch | Academic papers | No |
-| Wikipedia | Python script / HTTP fetch | Encyclopedic overviews | No |
-
-## Enhanced Research with Python Scripts
-
-The skill includes Python scripts for parallel fetching and scoring. Use them when available:
+## Quick Start
 
 ```bash
-# Fetch from multiple API sources in parallel (HN, SO, Lobsters, etc.)
-# Run from the repo root, or set SCOUT_ROOT to the repo path.
-python3 scripts/research.py "$TOPIC" --depth $DEPTH --format report
+# Fetch from all default sources (hn, so, lobsters, devto)
+python3 scripts/fetch.py all "python web frameworks"
+
+# Fetch from specific sources only
+python3 scripts/fetch.py all "kubernetes" --sources hn,so
+
+# Fetch from single source
+python3 scripts/fetch.py hn "machine learning" --limit 15
+
+# Enrich a Reddit URL with real engagement data
+python3 scripts/fetch.py enrich-reddit "https://reddit.com/r/python/comments/..."
+
+# Fetch grounded answer from Brave API (requires BRAVE_API_KEY)
+python3 scripts/fetch.py brave "what is kubernetes"
+
+# List available sources
+python3 scripts/fetch.py list-sources
+
+# Run health checks
+python3 scripts/fetch.py doctor
 ```
 
-If the script fails or for sources not covered by the script (general web search, Reddit, Twitter/X), fall back to manual fetching.
+---
 
-## Manual Research Process
+## Available Sources
 
-**For Twitter/X URLs:** Use bird read, bird thread, bird replies to get full context.
+| Source | Command | Engagement Fields | Notes |
+|--------|---------|-------------------|-------|
+| HackerNews | `hn` | points, num_comments | Tech discussions, high signal |
+| Stack Overflow | `so` | votes, answer_count, view_count, is_answered | Q&A, has accepted answers |
+| Lobsters | `lobsters` | score, comment_count | Curated tech, smaller community |
+| Dev.to | `devto` | reactions, comments | Developer tutorials/articles |
+| arXiv | `arxiv` | (none) | Academic papers |
+| Wikipedia | `wikipedia` | (none) | Encyclopedic reference |
+| DuckDuckGo | `duckduckgo` | (none) | Instant answers/related topics |
+| Reddit | `enrich-reddit <url>` | score, upvote_ratio, num_comments, top_comments | Requires URL |
+| Brave | `brave` | (grounded answer) | AI-generated with citations |
 
-**For general topics:**
-1. Web search for general results (use filters based on query type)
-2. Web search site:reddit.com for Reddit discussions
-3. Twitter/X search (bird CLI or equivalent tool)
-4. HTTP fetch HN Algolia for tech discussions (or use Python script)
-5. HTTP fetch Stack Exchange for programming Q&A
-6. HTTP fetch Lobsters for curated tech perspectives
-7. HTTP fetch Dev.to for developer tutorials/articles
-8. HTTP fetch arXiv/Wikipedia for academic topics (if relevant)
-9. Synthesize with citations
+---
 
-## Scoring System
+## Output Schema
 
-Results are scored using engagement-aware ranking:
+All output is JSON with this structure:
 
-**Tier 1 (Reddit, Twitter):** 45% relevance + 25% recency + 30% engagement
-**Tier 2 (HN, SO, Lobsters):** Same formula with -5 tier penalty
-**Tier 3 (Web, blogs, docs):** 55% relevance + 45% recency - 15 penalty
-
-Date confidence affects scoring:
-- HIGH confidence (API timestamp): +5 bonus
-- LOW confidence (no date): -15 penalty
-
-## Search Tool Parameters (if supported)
-
-| Parameter | Description | Example |
-|-----------|-------------|---------|
-| `query` | Search query (required) | `"machine learning"` |
-| `count` | Results to return | `10` |
-| `freshness` / `recency` | Time filter | `"day"`, `"week"`, `"month"`, `"year"` |
-| `date_after` | Results after date (YYYY-MM-DD) | `"2024-01-01"` |
-| `date_before` | Results before date (YYYY-MM-DD) | `"2024-06-30"` |
-| `domain_filter` | Allow/deny domains (max 20) | `["nature.com", ".edu"]` or `["-pinterest.com"]` |
-| `country` | 2-letter ISO code | `"US"`, `"DE"`, `"JP"` |
-| `language` | ISO 639-1 language | `"en"`, `"de"`, `"ja"` |
-| `content_budget` | If supported, max content tokens/bytes | `50000` |
-
-## Search Strategies by Query Type
-
-**RECOMMENDATIONS ("best X", "top X"):**
-- Prioritize Reddit and HN
-- Track mention counts
-- Output as ranked list
-
-**NEWS ("latest", "what's happening"):**
-Example (tool-agnostic pseudocode):
-```text
-search(query="topic", freshness="week")
+```json
+{
+  "meta": {
+    "query": "python frameworks",
+    "fetched_at": "2026-01-28T10:00:00+00:00",
+    "sources_requested": ["hn", "so"]
+  },
+  "results": {
+    "hn": {
+      "success": true,
+      "item_count": 10,
+      "items": [
+        {
+          "source_type": "hackernews",
+          "id": "12345",
+          "title": "Show HN: FastAPI 2.0 Released",
+          "url": "https://github.com/tiangolo/fastapi",
+          "hn_url": "https://news.ycombinator.com/item?id=12345",
+          "author": "tiangolo",
+          "date": "2024-01-27",
+          "date_confidence": "high",
+          "engagement": {
+            "points": 450,
+            "num_comments": 189
+          }
+        }
+      ],
+      "error": null,
+      "duration_ms": 433
+    },
+    "so": {
+      "success": true,
+      "item_count": 10,
+      "items": [...]
+    }
+  },
+  "source_status": [
+    {"source_name": "hn", "success": true, "item_count": 10},
+    {"source_name": "so", "success": true, "item_count": 10}
+  ]
+}
 ```
 
-**HOW_TO ("how to", "tutorial"):**
-- Focus on Stack Overflow, Dev.to
-- Include code examples
+---
 
-**COMPARISON ("vs", "compare"):**
-- Find direct comparison posts
-- Build pros/cons from sources
+## Fields Available for Your Scoring
 
-**GENERAL:**
-- Balanced approach
-- All sources weighted equally
+Each source returns different engagement metrics. Use these to rank results based on your detected query type.
 
-## Reddit Enrichment
+### Engagement Metrics by Source
 
-For Reddit posts found via web search, enrich with actual engagement data:
+| Source | Field | What It Means | Good For |
+|--------|-------|---------------|----------|
+| HackerNews | `points` | Community upvotes | Quality signal |
+| HackerNews | `num_comments` | Discussion activity | Controversial/interesting |
+| Stack Overflow | `votes` | Answer quality | Technical accuracy |
+| Stack Overflow | `answer_count` | Number of solutions | Well-answered questions |
+| Stack Overflow | `view_count` | Popularity | Common problems |
+| Stack Overflow | `is_answered` | Has accepted answer | Solved problems |
+| Lobsters | `score` | Community votes | Quality signal |
+| Lobsters | `comment_count` | Discussion depth | Nuanced topics |
+| Dev.to | `reactions` | Reader engagement | Popular articles |
+| Dev.to | `comments` | Discussion | Active topics |
+| Reddit | `score` | Net upvotes | Community agreement |
+| Reddit | `upvote_ratio` | Controversy indicator | Low = divisive |
+| Reddit | `num_comments` | Discussion activity | Hot topics |
+
+### Date Fields
+
+Every item includes:
+- `date`: ISO date string (e.g., "2024-01-27")
+- `date_confidence`: "high" | "med" | "low"
+
+**Scoring tip:** Weight items with "high" date_confidence more reliably for recency scoring. "low" confidence means the date is uncertain or missing.
+
+---
+
+## Suggested Scoring Strategies
+
+You decide weights based on query type. Here are suggested approaches:
+
+### For RECOMMENDATIONS ("best X", "top X")
+
+```
+Score = (engagement_weight * normalized_engagement) + (recency_weight * recency_score)
+
+Suggested weights:
+- engagement_weight = 0.7 (high - community validated)
+- recency_weight = 0.3 (moderate - still want recent)
+
+Also:
+- Count mentions across sources (FastAPI mentioned 5x = higher confidence)
+- Check comment count (high comments = active discussion)
+```
+
+### For NEWS ("what's happening with X")
+
+```
+Score = (recency_weight * recency_score) + (engagement_weight * normalized_engagement)
+
+Suggested weights:
+- recency_weight = 0.6 (high - freshness matters)
+- engagement_weight = 0.4 (moderate - still check engagement)
+
+Also:
+- Prefer items with date_confidence = "high"
+- Filter to last 30 days if possible
+```
+
+### For HOW_TO ("how to X")
+
+```
+Score = (answered_bonus * is_answered) + (votes_weight * votes) + (recency_weight * recency)
+
+Suggested weights:
+- answered_bonus = 20 points if is_answered = true
+- votes_weight = 0.5
+- recency_weight = 0.3
+
+Also:
+- Prioritize SO results (has is_answered, answer_count)
+- Check answer_count > 1 for multiple perspectives
+```
+
+### For COMPARISON ("X vs Y")
+
+```
+Approach:
+1. Search for "X vs Y" directly
+2. Also search for "X" and "Y" separately
+3. Count mentions of each option
+4. Look for direct comparison posts (title contains "vs")
+5. Aggregate pros/cons from comments
+
+Present as:
+- Side-by-side comparison
+- Mention counts
+- Community sentiment
+```
+
+---
+
+## Iterative Research Workflow
+
+Scout returns metadata. You decide what to do next. Follow this workflow:
+
+### Step 1: Initial Fetch
+
 ```bash
-# Get real upvotes and top comments
-curl "https://www.reddit.com/r/SUBREDDIT/comments/POST_ID.json?limit=5" -H "User-Agent: Research Agent"
+python3 scripts/fetch.py all "your query" --sources hn,so,lobsters
 ```
 
-## Browser Automation Fallback
+### Step 2: Evaluate Results
 
-Use browser automation ONLY when HTTP fetch fails:
-1. Open the URL in a browser automation tool
-2. Wait for network idle
-3. Capture a snapshot or extract text
-4. Close the browser
+Look at the returned JSON and evaluate:
 
-## bird CLI (Twitter/X)
+1. **Engagement signals:**
+   - High points/votes = community-validated
+   - High comments = active discussion
+   - is_answered = true = solved problem
 
+2. **Date signals:**
+   - Recent date + high confidence = fresh, reliable
+   - Old date = may be outdated (but classics can still be relevant)
+
+3. **Coverage:**
+   - Did all sources return results?
+   - Are there different perspectives across sources?
+
+### Step 3: Decide Next Action
+
+**If results look promising:**
+- Use WebFetch to read the top 2-3 URLs with highest engagement
+- Focus on URLs where you want more detail
+- Synthesize what you learn
+
+**If results are sparse:**
+- Try a refined query (more specific or more general)
+- Try different sources (e.g., add arxiv for academic topics)
+- Try alternative phrasings
+
+**If you need more depth:**
+- Call scout again with a narrower query
+- Fetch more URLs from the initial results
+
+### Step 4: Synthesize and Present
+
+After gathering metadata and fetching key URLs:
+
+1. Combine insights from metadata + fetched content
+2. Apply your scoring based on query type
+3. Present in format appropriate to user's question:
+   - Ranked list for recommendations
+   - Timeline for news
+   - Step-by-step for how-to
+   - Comparison table for vs queries
+
+---
+
+## Concrete Examples
+
+### Example 1: Recommendation Query
+
+**User:** "What are the best Python web frameworks?"
+
+**Your analysis:**
+- Query type: RECOMMENDATIONS
+- Topic: "Python web frameworks"
+- Best sources: hn, so (high engagement, community discussion)
+
+**Step 1: Fetch**
 ```bash
-bird search "<topic>" --json -n 15 --plain
-bird read "<url_or_id>" --json --plain
-bird thread "<url>" --json --plain
-bird replies "<url>" --json --plain -n 20
-bird news --json -n 10
+python3 scripts/fetch.py all "python web frameworks" --sources hn,so
 ```
 
-## API Endpoints (all no-auth, use with HTTP fetch)
+**Step 2: Evaluate results**
+```
+Results show:
+- FastAPI: 450 points, 189 comments on HN
+- Django: 320 points, 95 comments on HN; 125 votes on SO
+- Flask: 180 points on HN
+```
 
-# HackerNews
-https://hn.algolia.com/api/v1/search?query=<topic>&tags=story
+**Step 3: Decide**
+- FastAPI has highest engagement - fetch its URL for details
+- Multiple frameworks mentioned - this is a comparison
 
-# Stack Exchange
-https://api.stackexchange.com/2.3/search?order=desc&sort=relevance&intitle=<topic>&site=stackoverflow
+**Step 4: Use WebFetch on top results**
+- Fetch FastAPI article to understand why it's popular
+- Fetch Django comparison thread
 
-# Lobsters (no search API; use hottest feed and filter client-side)
-https://lobste.rs/hottest.json
+**Step 5: Synthesize**
+```
+Based on community engagement across HackerNews and Stack Overflow:
 
-# Dev.to
-https://dev.to/api/articles?tag=<topic>&per_page=10
+1. FastAPI (450 pts, 189 comments) - Modern, async, fast
+2. Django (320 pts + 125 SO votes) - Full-featured, mature
+3. Flask (180 pts) - Lightweight, flexible
 
-# arXiv (XML)
-http://export.arxiv.org/api/query?search_query=all:<topic>&max_results=10
+FastAPI is trending with highest recent engagement...
+```
 
-# Wikipedia
-https://en.wikipedia.org/w/api.php?action=query&format=json&list=search&srsearch=<topic>
+---
 
-## Output Format
+### Example 2: How-To Query
 
-Return findings in this enhanced markdown format:
+**User:** "How do I handle authentication in Next.js?"
 
-# Research: {Topic}
+**Your analysis:**
+- Query type: HOW_TO
+- Topic: "nextjs authentication"
+- Best sources: so, devto (has is_answered, code examples)
 
-**Query Type:** {TYPE} | **Depth:** {DEPTH} | **Generated:** {DATE}
+**Step 1: Fetch**
+```bash
+python3 scripts/fetch.py all "nextjs authentication" --sources so,hn,devto
+```
+
+**Step 2: Evaluate results**
+```
+SO results:
+- "NextAuth.js vs Clerk" - 45 votes, is_answered=true
+- "JWT auth in Next.js" - 32 votes, is_answered=true
+
+HN results:
+- "Show HN: Auth.js 5.0" - 120 comments
+```
+
+**Step 3: Decide**
+- SO item with is_answered=true and 45 votes is high quality
+- HN discussion has 120 comments - likely good debate
+- Fetch both for comprehensive answer
+
+**Step 4: Use WebFetch**
+- Fetch SO accepted answer for implementation details
+- Fetch HN discussion for community opinions
+
+**Step 5: Synthesize**
+```
+For Next.js authentication, the community recommends:
+
+1. NextAuth.js (Auth.js) - Most mentioned (8x across sources)
+   - 45 votes on accepted SO answer
+   - 120 comments on HN launch thread
+
+2. Clerk - Mentioned 5x, rising in popularity
+
+Implementation steps from the SO accepted answer:
+[Include code from fetched content]
+```
+
+---
+
+### Example 3: News Query
+
+**User:** "What's happening with AI coding assistants?"
+
+**Your analysis:**
+- Query type: NEWS
+- Topic: "AI coding assistants"
+- Best sources: hn, lobsters (tech news)
+
+**Step 1: Fetch**
+```bash
+python3 scripts/fetch.py all "AI coding assistants" --sources hn,lobsters
+```
+
+**Step 2: Evaluate results**
+- Sort by date (prefer recent)
+- Check date_confidence (prefer "high")
+- Note high-engagement items even if older
+
+**Step 3: Present timeline**
+```
+Recent developments in AI coding assistants:
+
+This week:
+- [Title] - 230 points, 89 comments (Jan 27)
+- [Title] - 180 points (Jan 26)
+
+Last month:
+- [Title] - 450 points (major announcement)
+
+Key themes: ...
+```
+
+---
+
+## When to Call Scout Again
+
+Scout can be called multiple times in a research session. Call it again when:
+
+1. **Initial results are sparse** - Try different query phrasing
+2. **You need a specific source** - Query just that source with narrower terms
+3. **User asks follow-up** - New aspect of the topic
+4. **Comparison needs both sides** - Fetch each option separately
+
+**Don't call again when:**
+- You already have good results - just use WebFetch on URLs
+- The question is about content you already fetched
+- Simple clarification doesn't need new data
+
+---
+
+## Reddit Research (Special Case)
+
+Scout doesn't search Reddit directly (no public search API). Instead:
+
+1. Use your WebSearch tool with `site:reddit.com` to find Reddit posts
+2. When you find a Reddit URL, enrich it:
+   ```bash
+   python3 scripts/fetch.py enrich-reddit "https://reddit.com/r/python/comments/abc123"
+   ```
+3. This returns real engagement data: score, upvote_ratio, top_comments
+
+---
+
+## Error Handling
+
+If a source fails, it will show in source_status:
+
+```json
+"source_status": [
+  {"source_name": "hn", "success": true, "item_count": 10},
+  {"source_name": "so", "success": false, "error": "Request timed out", "item_count": 0}
+]
+```
+
+**When sources fail:**
+- Continue with successful sources
+- Note the failure in your synthesis
+- Consider retrying or using alternative sources
+
+---
+
+## Environment Variables
+
+| Variable | Purpose |
+|----------|---------|
+| `BRAVE_API_KEY` | Enable Brave AI Grounding (optional) |
+
+---
 
 ## Summary
-(2-3 sentences overview with source count)
 
-## Top Findings (Ranked by Score)
+1. **Analyze the query** - Detect type (RECOMMENDATIONS, NEWS, HOW_TO, etc.)
+2. **Select sources** - Choose based on query type
+3. **Fetch metadata** - Use scout to get engagement data
+4. **Evaluate results** - Look at engagement, dates, coverage
+5. **Fetch content** - Use WebFetch on promising URLs
+6. **Synthesize** - Combine insights, apply scoring, present appropriately
 
-| Rank | Score | Finding | Source | Engagement |
-|------|-------|---------|--------|------------|
-| 1 | 85 | [Title](url) | Reddit r/sub | 250 pts, 45 comments |
-| 2 | 78 | [Title](url) | HackerNews | 180 points |
-| ... | ... | ... | ... | ... |
-
-## Twitter/X
-- Notable tweets with @handles, engagement, and links
-
-## Community (Reddit/HN/Stack Overflow)
-- Discussions with vote counts and top comment excerpts
-
-## Dev Community (Lobsters/Dev.to)
-- Curated discussions and developer articles
-
-## Academic (if applicable)
-- arXiv papers, Wikipedia references
-
-## Conflicting Information
-- Any disagreements between sources
-
-## Source Reliability
-
-| Source | Status | Results | Notes |
-|--------|--------|---------|-------|
-| Reddit | OK | 5 | Enriched |
-| HackerNews | OK | 8 | - |
-| Twitter | FAIL | 0 | Rate limited |
-
-## Sources
-1. [Title](url) - HIGH confidence, 2024-01-28
-2. [Title](url) - MED confidence, ~3 days ago
-...
-
-## Notes
-- Always include source URLs with engagement metrics
-- Deduplicate similar content across sources
-- For bird CLI, use --plain flag for stable output
-- Search at least 3-4 different sources before synthesizing
-- Report any source failures in the Source Reliability table
-```
-
----
-
-### Step 2: Present the Results
-
-Once the research agent returns its report, display the full report to the user. Do not summarize or truncate - show the complete research findings.
+Scout gives you the data. You make the decisions.

@@ -145,11 +145,12 @@ class TestEnrichRedditPost:
     def test_successful_enrichment(self, mock_request):
         mock_request.return_value = (True, MOCK_REDDIT_RESPONSE, None)
 
-        result = enrich.enrich_reddit_post(
+        result, error = enrich.enrich_reddit_post(
             "https://www.reddit.com/r/python/comments/abc123/test"
         )
 
         assert result is not None
+        assert error is None
         assert result['score'] == 150
         assert result['num_comments'] == 45
         mock_request.assert_called_once()
@@ -158,15 +159,17 @@ class TestEnrichRedditPost:
     def test_failed_request(self, mock_request):
         mock_request.return_value = (False, None, "Network error")
 
-        result = enrich.enrich_reddit_post(
+        result, error = enrich.enrich_reddit_post(
             "https://www.reddit.com/r/python/comments/abc123/test"
         )
 
         assert result is None
+        assert error == "Network error"
 
     def test_invalid_url(self):
-        result = enrich.enrich_reddit_post("https://example.com/not-reddit")
+        result, error = enrich.enrich_reddit_post("https://example.com/not-reddit")
         assert result is None
+        assert error == "Invalid Reddit URL"
 
 
 class TestEnrichRedditItem:
@@ -174,7 +177,7 @@ class TestEnrichRedditItem:
 
     @patch('lib.enrich.enrich_reddit_post')
     def test_successful_item_enrichment(self, mock_enrich):
-        mock_enrich.return_value = {
+        mock_enrich.return_value = ({
             'score': 200,
             'num_comments': 50,
             'upvote_ratio': 0.95,
@@ -182,7 +185,7 @@ class TestEnrichRedditItem:
             'top_comments': [
                 {'score': 30, 'author': 'user1', 'excerpt': 'Comment 1', 'date': '2024-01-28'},
             ],
-        }
+        }, None)
 
         item = schema.RedditItem(
             id='test123',
@@ -202,21 +205,20 @@ class TestEnrichRedditItem:
 
     @patch('lib.enrich.enrich_reddit_post')
     def test_failed_enrichment_preserves_item(self, mock_enrich):
-        mock_enrich.return_value = None
+        mock_enrich.return_value = (None, "Network error")
 
         item = schema.RedditItem(
             id='test123',
             title='Test Post',
             url='https://reddit.com/r/test/comments/test123/title',
             subreddit='test',
-            relevance=0.8,
         )
 
         result = enrich.enrich_reddit_item(item)
 
         # Item should be unchanged
         assert result.id == 'test123'
-        assert result.relevance == 0.8
+        assert result.title == 'Test Post'
 
 
 class TestEnrichRedditItems:

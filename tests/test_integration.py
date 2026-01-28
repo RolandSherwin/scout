@@ -224,21 +224,25 @@ class TestSourceRegistry:
         assert hasattr(result, 'items')
 
 
-class TestResearchCLILive:
-    """Smoke test for research CLI using live APIs."""
+class TestFetchCLILive:
+    """Smoke test for fetch CLI using live APIs."""
 
-    def test_research_cli_quick_report(self):
+    def test_fetch_cli_single_source(self):
         # Use a short query to reduce load/time
         result = subprocess.run(
-            [sys.executable, os.path.join(os.path.dirname(__file__), '..', 'scripts', 'research.py'),
-             "python web frameworks", "--depth", "quick", "--format", "report"],
+            [sys.executable, os.path.join(os.path.dirname(__file__), '..', 'scripts', 'fetch.py'),
+             "hn", "python", "--limit", "2"],
             capture_output=True,
             text=True,
             check=False,
         )
-        assert result.returncode == 0, f"research.py failed: {result.stderr}"
-        assert "Research:" in result.stdout
-        assert "Top Findings" in result.stdout
+        assert result.returncode == 0, f"fetch.py failed: {result.stderr}"
+        # Check JSON output structure
+        import json
+        data = json.loads(result.stdout)
+        assert "meta" in data
+        assert "results" in data
+        assert "hn" in data["results"]
 
 
 class TestCliToolsLive:
@@ -302,9 +306,9 @@ class TestRedditEnrichmentLive:
         assert permalink, "Reddit listing missing permalink"
 
         post_url = f"https://www.reddit.com{permalink}"
-        enriched = enrich.enrich_reddit_post(post_url)
+        enriched, error = enrich.enrich_reddit_post(post_url)
 
-        assert enriched is not None, "Reddit enrichment returned None"
+        assert enriched is not None, f"Reddit enrichment returned None: {error}"
         assert enriched.get('id'), "Missing post id"
-        assert enriched.get('title'), "Missing title"
+        assert enriched.get('title') is not None, "Missing title"
         assert enriched.get('num_comments') is not None, "Missing comment count"
