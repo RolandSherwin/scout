@@ -1,12 +1,15 @@
 ---
 name: scout
 description: >-
-  Multi-source metadata fetcher. Returns raw JSON with engagement metrics from
-  HackerNews, Stack Overflow, Lobsters, Dev.to, arXiv, Wikipedia, plus Reddit via
-  URL enrichment.
-  Scout fetches metadata - YOU decide ranking, filtering, deduplication, and
-  presentation based on the query type you identify.
-argument-hint: "<query>" or "<query> --sources hn,so"
+  Multi-source research agent with engagement-aware scoring. Searches Google, Reddit,
+  GitHub, HackerNews, Twitter/X, Stack Overflow, arXiv, Wikipedia, Lobsters, Dev.to
+  and more. Use when user says "research", "look up", "find out about", "what's the
+  latest on", "search for", "what do people think about", "deep dive", "investigate",
+  or asks open-ended questions about software/tools/products. Produces comprehensive
+  reports with citations.
+  DEPTH: Use "scout --quick <topic>" (5-10 sources), "scout <topic>" (15-25), or
+  "scout --deep <topic>" (40-60 sources).
+argument-hint: "<query>" or "--quick <query>" or "--deep <query>"
 ---
 
 # Scout - Community Metadata Fetcher
@@ -25,6 +28,18 @@ about ranking and presentation.
 | Reddit enrichment for engagement | Deduplicate if needed |
 | | Decide which URLs to fetch with WebFetch |
 | | Format output for user |
+
+---
+
+## NEVER Do
+
+- **NEVER call scout for single-source lookups** - Use WebFetch directly for a known URL
+- **NEVER call scout for real-time data** - Twitter/X results may be minutes old; use the twitter skill instead
+- **NEVER trust Reddit engagement without enrichment** - Web search results lack real scores; always enrich Reddit URLs
+- **NEVER skip query type detection** - Different queries need different source weights; detect FIRST, then fetch
+- **NEVER present raw JSON to users** - Always synthesize, rank, and format results appropriately
+- **NEVER call scout repeatedly for the same query** - Use WebFetch on URLs you already have
+- **NEVER use scout when user provides specific URLs** - Just fetch those URLs directly with WebFetch
 
 ---
 
@@ -58,31 +73,18 @@ Before calling scout, analyze the user's query to determine the best approach:
 - `TOPIC` = [core topic extracted]
 - `SELECTED_SOURCES` = [sources to query]
 
+> **For advanced query patterns**: Read [`references/query_patterns.md`](references/query_patterns.md) for detailed trigger patterns, scoring adjustments by query type, and source priority tiers.
+
 ---
 
-## Quick Start
+## Quick Reference
 
 ```bash
-# Fetch from all default sources (hn, so, lobsters, devto)
-python3 scripts/fetch.py all "python web frameworks"
-
-# Fetch from specific sources only
-python3 scripts/fetch.py all "kubernetes" --sources hn,so
-
-# Fetch from single source
-python3 scripts/fetch.py hn "machine learning" --limit 15
-
-# Enrich a Reddit URL with real engagement data
-python3 scripts/fetch.py enrich-reddit "https://reddit.com/r/python/comments/..."
-
-# Fetch grounded answer from Brave API (requires BRAVE_API_KEY)
-python3 scripts/fetch.py brave "what is kubernetes"
-
-# List available sources
-python3 scripts/fetch.py list-sources
-
-# Run health checks
-python3 scripts/fetch.py doctor
+python3 scripts/fetch.py all "<query>"                    # All sources
+python3 scripts/fetch.py all "<query>" --sources hn,so    # Specific sources
+python3 scripts/fetch.py enrich-reddit "<reddit-url>"     # Get real Reddit engagement
+python3 scripts/fetch.py brave "<query>"                  # AI grounded answer (needs BRAVE_API_KEY)
+python3 scripts/fetch.py doctor                           # Health check
 ```
 
 ---
@@ -105,50 +107,11 @@ python3 scripts/fetch.py doctor
 
 ## Output Schema
 
-All output is JSON with this structure:
+JSON with `meta`, `results` (by source), and `source_status`. Key fields per item:
+- `title`, `url`, `author`, `date`, `date_confidence` ("high"/"med"/"low")
+- `engagement`: source-specific metrics (see table below)
 
-```json
-{
-  "meta": {
-    "query": "python frameworks",
-    "fetched_at": "2026-01-28T10:00:00+00:00",
-    "sources_requested": ["hn", "so"]
-  },
-  "results": {
-    "hn": {
-      "success": true,
-      "item_count": 10,
-      "items": [
-        {
-          "source_type": "hackernews",
-          "id": "12345",
-          "title": "Show HN: FastAPI 2.0 Released",
-          "url": "https://github.com/tiangolo/fastapi",
-          "hn_url": "https://news.ycombinator.com/item?id=12345",
-          "author": "tiangolo",
-          "date": "2024-01-27",
-          "date_confidence": "high",
-          "engagement": {
-            "points": 450,
-            "num_comments": 189
-          }
-        }
-      ],
-      "error": null,
-      "duration_ms": 433
-    },
-    "so": {
-      "success": true,
-      "item_count": 10,
-      "items": [...]
-    }
-  },
-  "source_status": [
-    {"source_name": "hn", "success": true, "item_count": 10},
-    {"source_name": "so", "success": true, "item_count": 10}
-  ]
-}
-```
+Check `source_status` for failures - continue with successful sources.
 
 ---
 
@@ -463,22 +426,6 @@ Scout doesn't search Reddit directly (no public search API). Instead:
 3. This returns real engagement data: score, upvote_ratio, top_comments
 
 ---
-
-## Error Handling
-
-If a source fails, it will show in source_status:
-
-```json
-"source_status": [
-  {"source_name": "hn", "success": true, "item_count": 10},
-  {"source_name": "so", "success": false, "error": "Request timed out", "item_count": 0}
-]
-```
-
-**When sources fail:**
-- Continue with successful sources
-- Note the failure in your synthesis
-- Consider retrying or using alternative sources
 
 ---
 
